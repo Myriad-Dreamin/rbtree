@@ -405,11 +405,70 @@ func TestDepth(t *testing.T) {
 	fmt.Println(tree.Depth())
 }
 
-func BenchmarkRBNode_Insert(b *testing.B) {
+func BenchmarkRBNode_Insert1e6(b *testing.B) {
 	for i := 0; i < b.N;i++ {
 		var tree *RBNode
 		for j := 0; j < 1000000;j++ {
 			tree = tree.Insert(Int(i))
+		}
+	}
+}
+
+func BenchmarkRBNode_Insert1e7(b *testing.B) {
+	for i := 0; i < b.N;i++ {
+		var tree *RBNode
+		for j := 0; j < 10000000;j++ {
+			tree = tree.Insert(Int(i))
+		}
+	}
+}
+
+
+func BenchmarkRBNode_InsertDelete1e6(b *testing.B) {
+	for i := 0; i < b.N;i++ {
+		var tree *RBNode
+		for j := 0; j < 1000000;j++ {
+			tree = tree.Insert(Int(i))
+		}
+		for j := 0; j < 1000000;j++ {
+			tree = tree.Delete(Int(i))
+		}
+	}
+}
+
+
+func BenchmarkRBNode_RandomBehavior1e6(b *testing.B) {
+	var rnd = 233333
+	var values []Int
+	for i := 0; i < b.N;i++ {
+		var tree *RBNode
+		for j := 0; j < 1000000;j++ {
+			rnd = rnd * 2323129414 % 1000000007
+			if (rnd & 3) == 0 || (rnd & 3) == 1 {
+				tree = tree.Insert(Int(rnd))
+				values = append(values, Int(rnd))
+			} else if (rnd & 3) == 2 {
+				tree = tree.Delete(values[rnd % len(values)])
+			} else {
+				_ = tree.Find(values[rnd % len(values)])
+			}
+		}
+	}
+}
+
+func BenchmarkRBNode_RandomBehaviorPure1e6(b *testing.B) {
+	var rnd = 233333
+	var values []Int
+	for i := 0; i < b.N;i++ {
+		for j := 0; j < 1000000;j++ {
+			rnd = rnd * 2323129414 % 1000000007
+			if (rnd & 3) == 0 || (rnd & 3) == 1 {
+				values = append(values, Int(rnd))
+			} else if (rnd & 3) == 2 {
+				_ = values[rnd % len(values)]
+			} else {
+				_ = values[rnd % len(values)]
+			}
 		}
 	}
 }
