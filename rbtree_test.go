@@ -2,6 +2,7 @@ package rbtree
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
 	"testing"
 )
@@ -279,71 +280,137 @@ func checkFather(t *RBNode) bool {
 	return true
 }
 
+func checkBST(rt *RBNode) bool {
+	if rt == nil {
+		return true
+	}
+	if rt.Ch[0] != nil {
+		if rt.V.Less(rt.Ch[0].V) {
+			return false
+		}
+		if !checkBST(rt.Ch[0]) {
+			return false
+		}
+	}
+	if rt.Ch[1] != nil {
+		if rt.Ch[1].V.Less(rt.V) {
+			return false
+		}
+		if !checkBST(rt.Ch[1]) {
+			return false
+		}
+	}
+	return true
+}
+
+type rbCheckContext struct {
+	cnt int
+	ccnt int
+}
+
+func (ctx *rbCheckContext) _checkRBProperty(rt *RBNode) {
+	if rt == nil {
+		if ctx.cnt == -1 {
+			ctx.cnt = ctx.ccnt
+		} else if ctx.ccnt != ctx.cnt {
+			panic("bad count property")
+		}
+		return
+	}
+	if rt.Color == ColorBlack {
+		ctx.ccnt++
+	}
+
+	if rt.HasLeftChild() {
+		if rt.Color == ColorRed && rt.Ch[0].Color == ColorRed {
+			panic(fmt.Errorf("bad color property %v", rt))
+		}
+	}
+	ctx._checkRBProperty(rt.Ch[0])
+
+	if rt.HasRightChild() {
+		if rt.Color == ColorRed && rt.Ch[1].Color == ColorRed {
+			panic(fmt.Errorf("bad color property %v", rt))
+		}
+	}
+	ctx._checkRBProperty(rt.Ch[1])
+
+	if rt.Color == ColorBlack {
+		ctx.ccnt--
+	}
+}
+
+func (ctx *rbCheckContext) checkRBProperty(rt *RBNode) (good bool) {
+	ctx.cnt = -1
+	ctx.ccnt = 0
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+			good = false
+		} else {
+			good = true
+		}
+	}()
+	ctx._checkRBProperty(rt)
+	return
+}
+
+func assertRBTree(tree *RBNode) {
+	if !checkRB(tree) {
+		PrintL(tree)
+		panic("bad")
+	}
+}
+
+
+func checkRB(rt *RBNode) bool {
+	if !checkFather(rt) {
+		fmt.Println("err father")
+	}
+	if !checkBST(rt) {
+		fmt.Println("err bst")
+	}
+	return (&rbCheckContext{}).checkRBProperty(rt)
+}
+
 
 func TestRBTree(t *testing.T) {
-
-	var values []Int
-
 	var tree *RBNode
-	for i := Int(10); i < 20; i++ {
-		tree = tree.Insert(i)
-		checkFather(tree)
-		values = append(values, i)
-	}
-	for i := Int(1); i < 10; i++ {
-		tree = tree.Insert(i)
-		checkFather(tree)
-		values = append(values, i)
-	}
-	for i := Int(20); i < 30; i++ {
-		tree = tree.Insert(i)
-		checkFather(tree)
-		values = append(values, i)
-	}
-	for i := Int(10); i < 20; i++ {
-		tree = tree.Insert(i)
-		checkFather(tree)
-		values = append(values, i)
-	}
-	for i := Int(1); i < 10; i++ {
-		tree = tree.Insert(i)
-		checkFather(tree)
-		values = append(values, i)
-	}
-	for i := Int(20); i < 30; i++ {
-		tree = tree.Insert(i)
-		checkFather(tree)
-		values = append(values, i)
-	}
-	for i := Int(10); i < 20; i++ {
-		tree = tree.Insert(i)
-		if !checkFather(tree) {
-			panic("bad father")
+
+	for i := 0; i < 1000; i++ {
+		is := rand.Perm(100)
+		for j := range is {
+			tree = tree.Insert(Int(is[j]))
+			assertRBTree(tree)
 		}
-		values = append(values, i)
-	}
-	for i := Int(1); i < 10; i++ {
-		tree = tree.Insert(i)
-		if !checkFather(tree) {
-			panic("bad father")
+		for j := range is {
+			tree = tree.Delete(Int(is[j]))
+			assertRBTree(tree)
 		}
-		values = append(values, i)
-	}
-	for i := Int(20); i < 30; i++ {
-		tree = tree.Insert(i)
-		if !checkFather(tree) {
-			panic("bad father")
+		tree = tree.Delete(Int(233))
+		assertRBTree(tree)
+		if tree != nil {
+			panic("bad delete")
 		}
-		values = append(values, i)
 	}
-	Preorder(tree)
-	for i := range values {
-		tree = tree.Delete(values[i])
-		if !checkFather(tree) {
-			panic("bad father")
+}
+
+
+
+func TestDepth(t *testing.T) {
+	var tree *RBNode
+	for j := 0; j < 10000000;j++ {
+		tree = tree.Insert(Int(j))
+	}
+	fmt.Println(tree.Depth())
+}
+
+func BenchmarkRBNode_Insert(b *testing.B) {
+	for i := 0; i < b.N;i++ {
+		var tree *RBNode
+		for j := 0; j < 1000000;j++ {
+			tree = tree.Insert(Int(i))
 		}
-		fmt.Println()
-		Preorder(tree)
 	}
 }
 

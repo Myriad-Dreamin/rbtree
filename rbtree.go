@@ -1,6 +1,8 @@
 package rbtree
 
-import "fmt"
+import (
+	"fmt"
+)
 
 const (
 	ColorBlack = true
@@ -30,18 +32,46 @@ type RBNode struct {
 }
 
 func (r *RBNode) String() string {
-	//fmt.Println(&r, &r.Ch[0], &r.Ch[1])
 	if r == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf(`{color:%v, child[]:{%v, %v}}`, r.Color, r.Ch[0], r.Ch[1])
+	return fmt.Sprintf(`{color:%v, value: %v, child[]:{%v, %v}}`, r.Color, r.V, r.Ch[0], r.Ch[1])
 }
 
 func (r *RBNode) GetValue() interface{} {
 	return r.V
 }
 
-func (r *RBNode) Index(i int) Node {
+func max(a, b int) int {
+	if a < b {
+		return b
+	}
+	return a
+}
+
+func (r *RBNode) Depth() int {
+	if r == nil {
+		return 0
+	}
+	return max(r.Ch[0].Depth(), r.Ch[1].Depth()) + 1
+}
+
+type trace struct {
+	V interface{}
+	Color string
+}
+
+func (r *RBNode) GetValueTrace() interface{} {
+	if r.Red() {
+		return trace{V:r.V, Color:"R"}
+	} else if r != nil {
+		return trace{V:r.V, Color:"B"}
+	} else {
+		return trace{Color:"B"}
+	}
+}
+
+func (r *RBNode) Index(i int) interface{} {
 	return r.Ch[i]
 }
 
@@ -67,7 +97,7 @@ func (r *RBNode) IsRightChild() uint8 {
 	return 0
 }
 
-func (r *RBNode) Uncle() *RBNode {
+func (r *RBNode) Sibling() *RBNode {
 	if r == nil {
 		return nil
 	}
@@ -155,93 +185,118 @@ func (r *RBNode) Prec() (res *RBNode) {
 	return
 }
 
+// fix
+func fix(rt, r, sibling *RBNode) *RBNode {
+	// must have sibling
+	faz := sibling.Faz
+	if faz == nil {
+		sibling.Color = ColorBlack
+		return sibling
+	}
+
+	if sibling.Red() {
+		sibling.Color, faz.Color = ColorBlack, ColorRed
+		sibling.Rotate()
+		if sibling.Faz == nil {
+			rt = sibling
+		}
+		if faz.IsLeftChild() == 1 {
+			return fix(rt, r, faz.Ch[1])
+		} else {
+			return fix(rt, r, faz.Ch[0])
+		}
+	} else {
+		if sibling.Ch[0].Black() && sibling.Ch[1].Black() {
+			if faz.Red() {
+				sibling.Color, faz.Color = ColorRed, ColorBlack
+				return rt
+			} else {
+				sibling.Color = ColorRed
+				if faz.Faz == nil {
+					return faz
+				}
+				return fix(rt, faz, faz.Sibling())
+			}
+		} else {
+			rch := sibling.IsRightChild()
+			// sibling.Ch[0] must not be nil
+			if sibling.Ch[rch ^ 1].Red() && sibling.Ch[rch].Black() {
+				sibling.Ch[rch ^ 1].Color, sibling.Color = ColorBlack, ColorRed
+				sibling = sibling.Ch[rch ^ 1].Rotate()
+			}
+			// sibling.Ch[1] must be red
+			sibling.Color, faz.Color = faz.Color, sibling.Color
+			sibling.Rotate()
+			sibling.Ch[rch].Color = ColorBlack
+			if sibling.Faz == nil {
+				return sibling
+			} else {
+				return rt
+			}
+		}
+	}
+}
+
 func deleteX(rt, r *RBNode) *RBNode {
+	if r == nil {
+		return rt
+	}
+	//    *
+	//    |
+	//    *
+	//  /   \
+	// *     *
 	if r.HasLeftChild() && r.HasRightChild() {
 		y := r.Prec()
 		r.V, y.V = y.V, r.V
 		return deleteX(rt, y)
-	} else if r.HasLeftChild() || r.HasRightChild() {
+	} else if r.HasLeftChild() || r.HasRightChild() || r.Color == ColorBlack {
+		//   sA       sB       sC
+		//    *        *        *
+		//    |        |        |
+		//    B        B        B
+		//  /   \    /   \    /   \
+		// B     *  *     B  B     B
 		var ch *RBNode
 		if r.HasLeftChild() {
 			ch = r.Ch[0]
-			r.Ch[0] = nil
 		} else {
 			ch = r.Ch[1]
-			r.Ch[1] = nil
-		}
-		if r.Black() {
-			ch.Color = ColorBlack
 		}
 		faz := r.Faz
-		if r.Faz != nil {
-			faz.Ch[r.IsRightChild()] = ch.SetFaz(faz)
-			r.Faz = nil
-			return rt
+		ch.SetFaz(faz)
+		var sib *RBNode
+		if faz != nil {
+			sib = r.Sibling()
+			faz.Ch[r.IsRightChild()] = ch
 		} else {
-			ch.Faz = nil
+			if ch != nil {
+				ch.Color = ColorBlack
+			}
 			return ch
 		}
-	} else {
-		if r.Faz == nil {
-			return nil
-		}
-		unc, faz := r.Uncle(), r.Faz
-		faz.Ch[r.IsRightChild()] = nil
-		r.Faz = nil
-
-		if unc == nil {
-			if rt == r {
-				return nil
-			}
+		if ch.Red() {
+			ch.Color = ColorBlack
 			return rt
 		} else {
-			if unc.HasLeftChild() && unc.HasRightChild() {
-				unc.Ch[0].Color, unc.Ch[1].Color, unc.Color, faz.Color = ColorRed, ColorBlack, ColorBlack, ColorBlack
-				unc.Rotate()
-				if unc.Faz == nil {
-					return unc
-				}
-				return rt
-			} else if unc.HasLeftChild() || unc.HasRightChild() {
-				var nz *RBNode
-				if unc.HasLeftChild() {
-					nz = unc.Ch[0]
-				} else {
-					nz = unc.Ch[1]
-				}
-				if nz.IsRightChild() == unc.IsRightChild() {
-					faz.Color = ColorRed
-					unc.Rotate()
-					if unc.Faz == nil {
-						return unc
-					}
-					return rt
-				} else {
-					faz.Color, unc.Color, nz.Color = ColorRed, ColorRed, ColorBlack
-					nz.Rotate().Rotate()
-					if nz.Faz == nil {
-						return nz
-					}
-					return rt
-				}
-			} else {
-				faz.Color, unc.Color = ColorBlack, ColorRed
-				return rt
-			}
+			return fix(rt, ch, sib)
 		}
-	}
-}
-
-func deleteN(rt *RBNode, leer LessEqualer) *RBNode {
-	r := find(rt, leer)
-	if r == nil {
+	} else {
+		//    *
+		//    |
+		//    R
+		//  /   \
+		// n     n
+		faz := r.Faz
+		if faz != nil {
+			faz.Ch[r.IsRightChild()] = nil
+		}
 		return rt
 	}
-	return deleteX(rt, r)
 }
 
 func (r *RBNode) Delete(leer LessEqualer) *RBNode {
-	return deleteN(r, leer)
+	return deleteX(r, find(r, leer))
 }
 
 
@@ -267,10 +322,17 @@ func proc(n *RBNode) *RBNode {
 		return n.Faz
 	}
 	faz, gra := n.Faz, n.Faz.Faz
-	unc := faz.Uncle()
+	unc := faz.Sibling()
 
 	if unc.Red() {
 		unc.Color, faz.Color, gra.Color = ColorBlack, ColorBlack, ColorRed
+		if gra.Faz == nil {
+			gra.Color = ColorBlack
+			return gra
+		}
+		if gra.Faz.Black() {
+			return nil
+		}
 		return proc(gra)
 	} else {
 		if n.IsRightChild() == faz.IsRightChild() {
@@ -314,9 +376,5 @@ func NewRBNode(leer LessEqualer) *RBNode {
 	return &RBNode{
 		V:     leer,
 	}
-}
-
-
-func main() {
 }
 
